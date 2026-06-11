@@ -1,0 +1,41 @@
+services:
+  weaviate:
+    image: cr.weaviate.io/semitechnologies/weaviate:1.33.4
+    ports:
+      - "8080:8080"
+      - "50052:50051"
+    environment:
+      QUERY_DEFAULTS_LIMIT: 25
+      AUTHENTICATION_ANONYMOUS_ACCESS_ENABLED: 'true'
+      PERSISTENCE_DATA_PATH: '/var/lib/weaviate'
+      CLUSTER_HOSTNAME: 'node1'
+      ENABLE_MODULES: 'backup-filesystem'
+      BACKUP_FILESYSTEM_PATH: '/tmp/backups'
+    volumes:
+      - ./data/backups/weaviate_backups:/tmp/backups
+      - ./data/weaviate_data:/var/lib/weaviate
+    networks:
+      - law_net
+  neo4j:
+    image: neo4j:latest
+    container_name: my_neo4j
+    ports:
+      - "7474:7474" 
+      - "7687:7687" 
+    volumes:
+      - ./data/neo4j/data:/data
+      - ./data/neo4j/logs:/logs
+      - ./data/neo4j/import:/var/lib/neo4j/import
+      - ./data/neo4j/plugins:/plugins
+    environment:
+      - NEO4J_AUTH=neo4j/12345678
+      - NEO4J_PLUGINS=["apoc"]
+      # - NEO4J_server_memory_heap_initial_size=512M
+      # - NEO4J_server_memory_heap_max_size=1G
+    networks:
+      - law_net
+    restart: unless-stopped
+    
+networks:
+  law_net:
+    external: true

@@ -1,0 +1,17 @@
+services:
+  run_python:
+    image: run_python:latest
+    container_name: run_python
+    ports: 
+      - 8002:8002
+    volumes:
+      - ./..:/app
+    working_dir: /app
+    tty: true        # Cấp một terminal ảo
+    stdin_open: true # Giữ luồng nhập dữ liệu mở
+    networks:
+      - law_net
+      
+networks:
+  law_net:
+    external: true

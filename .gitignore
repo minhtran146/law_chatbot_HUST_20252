@@ -1,0 +1,14 @@
+__pycache__
+__init__.py
+
+data/*
+data/neo4j/*
+data/weaviate_data/*
+data/phap_dien_dataset_45_chu_de/*
+data/*.json
+data/*.zip
+
+src/models/*
+.data
+.idea
+.omo
