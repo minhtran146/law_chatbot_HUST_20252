@@ -30,8 +30,8 @@ services:
     environment:
       - NEO4J_AUTH=neo4j/12345678
       - NEO4J_PLUGINS=["apoc"]
-      # - NEO4J_server_memory_heap_initial_size=512M
-      # - NEO4J_server_memory_heap_max_size=1G
+      - NEO4J_server_memory_heap_initial_size=512M
+      - NEO4J_server_memory_heap_max_size=2G
     networks:
       - law_net
     restart: unless-stopped
@@ -44,6 +44,8 @@ services:
     volumes:
       - .:/app
     working_dir: /app
+    environment:
+      - NVIDIA_API_KEY=${NVIDIA_API_KEY}
     depends_on:
       weaviate:
         condition: service_started

@@ -11,17 +11,15 @@ sys.path.append("/app/src/neo4j_kg")
 from pydantic import BaseModel
 from query import query_article_hybrid
 import weaviate
-from weaviate.classes.init import AdditionalConfig, Timeout
 from neo4j_client.neo4j_client import Neo4jClient
 from memory.conversation_memory import ConversationMemory
 from memory.entity_memory import EntityMemory
 from memory.topic_segmenter import segment_turns, label_segment
 from memory.memory_compressor import compress_turns, format_compressed_context
-
-print(sys.path)
+from memory.entity_extractor import extract_entities
 
 COLLECTION_NAME = "bge_clean"
-FIELD_TO_BM25 = 'content'
+BM25_FIELDS = ["content", "note_content", "article_name"]
 URI = os.getenv("URI", "neo4j://neo4j:7687")
 USER = "neo4j"
 PASSWORD = "12345678"
@@ -63,7 +61,13 @@ app = FastAPI()
 
 def get_session(session_id: str) -> str:
     if not session_id:
-        session_id = memory.create_session()
+        return memory.create_session()
+    with neo4j_client.driver.session() as session:
+        exists = session.run(
+            "MATCH (s:Session {id: $id}) RETURN s", id=session_id
+        ).single()
+        if not exists:
+            return memory.create_session()
     return session_id
 
 class QueryRequest(BaseModel):
@@ -81,41 +85,67 @@ def query_content(query: QueryRequest):
     memory.add_message(session_id, "user", query.query)
     entity_memory.store_entities(session_id, query.query)
 
-    turns = memory.get_paired_turns(session_id, limit=20)
-    segments = segment_turns(turns)
-    compressed = compress_turns(turns, max_important=8)
-    conv_context = format_compressed_context(compressed)
-    entity_context = entity_memory.build_context(session_id, query.query)
+    current_entities = extract_entities(query.query)
+    has_doc_ref = any(e["type"] == "document_number" for e in current_entities)
+    has_art_ref = any(e["type"] == "article_index" for e in current_entities)
 
-    # segment info
-    seg_summary = ""
-    if len(segments) > 1:
-        current_seg = segments[-1] if segments else None
-        if current_seg:
-            seg_summary = f"chủ đề hiện tại: {label_segment(current_seg)}"
+    if not current_entities:
+        entity_context = entity_memory.build_context(session_id, query.query)
+        search_query = f"{entity_context}\n{question}" if entity_context else question
+        search_alpha = alpha
+    else:
+        search_query = question
+        search_alpha = alpha
 
-    context_parts = [p for p in [conv_context, entity_context, seg_summary] if p]
-    enriched_query = f"{' | '.join(context_parts)}\n{question}" if context_parts else question
-
-    encoded_query = encode_query(enriched_query)
+    encoded_query = encode_query(search_query)
     result = query_article_hybrid(
         collection,
-        enriched_query, 
+        search_query,
         encoded_query,
         top_k,
-        alpha,
-        FIELD_TO_BM25
+        search_alpha,
+        BM25_FIELDS
+    )
+
+    if has_doc_ref or has_art_ref:
+        ref_terms = []
+        for e in current_entities:
+            if e["type"] in ("document_number", "article_index"):
+                ref_terms.append(e["value"])
+        ref_query = " ".join(ref_terms)
+        ref_result = query_article_hybrid(
+            collection, ref_query, encoded_query, top_k, 0.0,
+            ["note_content"],
         )
+        seen_ids = set()
+        merged = []
+        for r in ref_result.objects:
+            rid = r.properties.get("article_id")
+            if rid not in seen_ids:
+                seen_ids.add(rid)
+                merged.append({
+                    "rank": len(merged) + 1,
+                    "article_node": r.properties,
+                    "source": "ref"
+                })
+        for r in result.objects:
+            rid = r.properties.get("article_id")
+            if rid not in seen_ids:
+                seen_ids.add(rid)
+                merged.append({
+                    "rank": len(merged) + 1,
+                    "article_node": r.properties,
+                    "source": "semantic"
+                })
+        final_res = merged[:top_k]
+    else:
+        final_res = []
+        for rank_idx, r in enumerate(result.objects):
+            final_res.append({
+                "rank": rank_idx + 1,
+                "article_node": r.properties
+            })
 
-    final_res = []
-    print(result.objects)
-    for rank_idx, r in enumerate(result.objects):
-        final_res.append({
-            "rank": rank_idx + 1,
-            "article_node": r.properties
-
-        })
-        print(r.properties)
     memory.add_message(session_id, "assistant", str(final_res))
     return {"session_id": session_id, "result": final_res}
 
@@ -153,7 +183,7 @@ def search_metadata_and_log_by_document_number_and_index(query: QueryRequest):
     article_number = re.findall(r"(\S+[\/-]\S+([\/-]\S+)*)", question)
     if article_number:
         print(article_number)
-        article_index = re.findall(r"điều\s+(\d+)", question) # ví dụ: "điều 1"
+        article_index = re.findall(r"điều\s+(\d+)", question)
         if article_index:
             print(article_index)
             result = neo4j_client.search_log_by_document_number_and_index(article_number[0][0], article_index[0])
@@ -167,3 +197,8 @@ def search_metadata_and_log_by_document_number_and_index(query: QueryRequest):
         print("Không thấy số hiệu văn bản trong query.")
         memory.add_message(session_id, "assistant", "Không tìm thấy văn bản")
         return {"session_id": session_id, "logs": []}
+
+@app.get("/session_history")
+def session_history(session_id: str):
+    history = memory.get_history(session_id, limit=100)
+    return {"session_id": session_id, "history": history}

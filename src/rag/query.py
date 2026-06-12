@@ -11,11 +11,11 @@ from weaviate.collections.classes.internal import QueryReturn
 from weaviate.classes.init import AdditionalConfig, Timeout
 from dotenv import load_dotenv
 load_dotenv()
-os.environ["HTTP_PROXY"] = "http://10.36.252.45:8080"
-os.environ["HTTPS_PROXY"] = "http://10.36.252.45:8080"
+# os.environ["HTTP_PROXY"] = "http://10.36.252.45:8080"
+# os.environ["HTTPS_PROXY"] = "http://10.36.252.45:8080"
 # os.environ['TRANSFORMERS_OFFLINE'] = '1'
 # os.environ['HF_HUB_OFFLINE'] = '1'
-os.environ['no_proxy'] = '127.0.0.1,localhost'
+# os.environ['no_proxy'] = '127.0.0.1,localhost'
 ssl._create_default_https_context = ssl._create_unverified_context
 
 
@@ -43,14 +43,13 @@ def query_article_bm25(article, query: str, top_k: int = 3):
     )
     return results
 
-def query_article_hybrid(article, query: str, q_vec, top_k: int = 3, alpha = 0.45, field_to_bm25_search = "embedding_field", 
-                         title_list_for_filter = None, filter_level = None
-                         ):
+def query_article_hybrid(article, query: str, q_vec, top_k: int = 3, alpha = 0.45, query_properties = None):
+    if query_properties is None:
+        query_properties = ["content", "note_content", "article_name"]
     results = article.query.hybrid(
         query=query, 
         vector=q_vec.tolist(),
-        query_properties=[field_to_bm25_search],
-        # filters=multi_filter,
+        query_properties=query_properties,
         alpha=alpha,
         limit=top_k, 
         return_metadata=MetadataQuery(score=True),

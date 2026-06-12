@@ -105,11 +105,12 @@ class EntityMemory:
                     )
 
             elif entity["type"] == "article_index":
-                num = entity["value"].split()[-1]
+                name_filter = entity["value"].lower()
                 matches = session.run(
-                    "MATCH (a:Article) WHERE a.name CONTAINS $num "
-                    "RETURN a.id AS target_id, 'Article' AS target_label",
-                    num=num,
+                    "MATCH (a:Article) WHERE LOWER(a.name) CONTAINS $name_filter "
+                    "RETURN a.id AS target_id, 'Article' AS target_label "
+                    "LIMIT 5",
+                    name_filter=name_filter,
                 )
                 for m in matches:
                     session.run(
