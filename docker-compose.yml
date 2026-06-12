@@ -23,10 +23,10 @@ services:
       - "7474:7474" 
       - "7687:7687" 
     volumes:
-      - ./data/neo4j/data:/data
-      - ./data/neo4j/logs:/logs
-      - ./data/neo4j/import:/var/lib/neo4j/import
-      - ./data/neo4j/plugins:/plugins
+      - ./neo4j/data:/data
+      - ./neo4j/logs:/logs
+      - ./neo4j/import:/var/lib/neo4j/import
+      - ./neo4j/plugins:/plugins
     environment:
       - NEO4J_AUTH=neo4j/12345678
       - NEO4J_PLUGINS=["apoc"]
@@ -35,6 +35,43 @@ services:
     networks:
       - law_net
     restart: unless-stopped
+
+  fastapi:
+    build: ./python_run
+    container_name: fastapi
+    ports:
+      - "8002:8002"
+    volumes:
+      - .:/app
+    working_dir: /app
+    depends_on:
+      weaviate:
+        condition: service_started
+      neo4j:
+        condition: service_started
+    networks:
+      - law_net
+    restart: unless-stopped
+
+  gradio:
+    build: ./python_run
+    container_name: gradio
+    ports:
+      - "7860:7860"
+    volumes:
+      - .:/app
+    working_dir: /app
+    command: python src/gradio_app.py
+    depends_on:
+      fastapi:
+        condition: service_started
+    networks:
+      - law_net
+    restart: unless-stopped
+    environment:
+      - GROQ_API_KEY=${GROQ_API_KEY}
+      - FASTAPI_URL=${FASTAPI_URL:-http://fastapi:8002}
+      - GROQ_MODEL=${GROQ_MODEL:-llama-3.3-70b-versatile}
     
 networks:
   law_net:

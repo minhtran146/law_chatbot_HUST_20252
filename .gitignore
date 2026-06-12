@@ -12,3 +12,6 @@ src/models/*
 .data
 .idea
 .omo
+neo4j
+.venv
+.env

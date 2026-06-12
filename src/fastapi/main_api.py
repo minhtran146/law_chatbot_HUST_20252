@@ -1,10 +1,14 @@
 from fastapi import FastAPI
+import httpx  # <--- Thêm dòng này
 import sys
+import re
+import os
+from openai import OpenAI
+import numpy as np
+http_client = httpx.Client(verify=False)
 sys.path.append("/app/src/rag")
 sys.path.append("/app/src/neo4j_kg")
-print(sys.path)
 from pydantic import BaseModel
-from sentence_transformers import SentenceTransformer
 from query import query_article_hybrid
 import weaviate
 from weaviate.classes.init import AdditionalConfig, Timeout
@@ -13,19 +17,32 @@ from memory.conversation_memory import ConversationMemory
 from memory.entity_memory import EntityMemory
 from memory.topic_segmenter import segment_turns, label_segment
 from memory.memory_compressor import compress_turns, format_compressed_context
-import re
-import os
+
+print(sys.path)
 
 COLLECTION_NAME = "bge_clean"
 FIELD_TO_BM25 = 'content'
 URI = os.getenv("URI", "neo4j://neo4j:7687")
 USER = "neo4j"
 PASSWORD = "12345678"
-model = SentenceTransformer(
-        'src/models', device = 'cpu'
-    )
+NVIDIA_API_KEY = os.getenv("NVIDIA_API_KEY")
+NVIDIA_BASE_URL = "https://integrate.api.nvidia.com/v1"
+
+nvidia_client = OpenAI(
+    api_key=NVIDIA_API_KEY,
+    base_url=NVIDIA_BASE_URL,
+    http_client=http_client
+)
+
 def encode_query(query: str):
-    return model.encode([query], convert_to_numpy=True)[0]
+    response = nvidia_client.embeddings.create(
+        input=[query],
+        model="baai/bge-m3",
+        encoding_format="float",
+        extra_body={"truncate": "NONE"}
+    )
+    embedding = response.data[0].embedding
+    return np.array(embedding)
 
 #connect to neo4j 
 neo4j_client = Neo4jClient(URI, USER, PASSWORD)

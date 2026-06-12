@@ -25,5 +25,10 @@ RUN pip install --default-timeout=1000 --no-cache-dir \
     --trusted-host files.pythonhosted.org \
     -r requirements.txt
 
+RUN apt-get update && apt-get install -y ca-certificates && update-ca-certificates
+
 # Bước 6: Copy mã nguồn vào container
 COPY . .
+
+# Bước 7: Auto-start FastAPI với uvicorn
+CMD ["uvicorn", "src.fastapi.main_api:app", "--host", "0.0.0.0", "--port", "8002"]

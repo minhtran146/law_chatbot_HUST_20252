@@ -4,8 +4,8 @@ from collections import defaultdict
 from glob import glob
 from tqdm import tqdm
 import os
-import torch
-from sentence_transformers import SentenceTransformer
+# import torch
+# from sentence_transformers import SentenceTransformer
 import ssl
 
 os.environ['TRANSFORMERS_OFFLINE'] = '1'
@@ -139,16 +139,16 @@ if __name__ == "__main__":
     model = 1
 
     client = weaviate.connect_to_local(
-        host="weaviate",
+        host="localhost",
         port=8080,
-        grpc_port=50051,
+        grpc_port=50052,
         skip_init_checks=True
     )
     
     file_paths = glob('../../data/phap_dien_dataset_45_chu_de/*.json')
     subject_titles_parts = client.collections.get("bge_clean")
-    batch_size_import = 64
-    batch_size_encode = 64
+    batch_size_import = 32
+    batch_size_encode = 32
     embedding_field = "embedding_field"
     try:
         import_to_weaviate(
